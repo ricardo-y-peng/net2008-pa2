@@ -152,10 +152,22 @@ for device in devices:
             violation["down"] = down_int
             violations.append(violation)
 
+    #check if policy require to check the unknown role
+    if policy["min_os"] is not None:
+        #check if device.role in the keys of policy["min_os"]'s role to match
+        if device.role not in policy["min_os"]:
+                violation = {}
+                violation["device"] = device.id
+                violation["type"] = "unknown_role"
+                violation["role"] = device.role
+                violations.append(violation)
+
+
 
     
 
 audit["violations"] = violations
+
 
 
 
