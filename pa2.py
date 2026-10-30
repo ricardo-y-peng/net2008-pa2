@@ -12,7 +12,18 @@ class Device:
         self.owner = owner
         self.interfaces = interfaces
 
+    def check_owner(self):
+        if self.owner is None:
+            return "missing_owner"
+
     
+
+   
+
+
+
+    
+        
 
 
 
@@ -111,8 +122,24 @@ print("the interface status: ", int_status)
 audit["interfaces"] = int_status
 
 
-#violations key
+#violations and compliant key
 violations = []
+for device in devices:
+
+    #check if policy require to check owner first
+    if policy["require_owner"] == True:
+        #then check the owner
+        if device.check_owner() == "missing_owner":
+                violation = {}
+                violation["device"] = device.id
+                violation["type"] = "missing_owner"
+                violations.append(violation)
+
+
+    
+
+audit["violations"] = violations
+
 
 
 
