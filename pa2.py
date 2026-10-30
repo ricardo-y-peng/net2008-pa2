@@ -16,6 +16,13 @@ class Device:
         if self.owner is None:
             return "missing_owner"
 
+    def check_interfaces(self):
+        down_int = 0
+        for interface in self.interfaces:
+            if interface["status"] == "down":
+                down_int += 1
+        return down_int
+
     
 
    
@@ -135,10 +142,21 @@ for device in devices:
                 violation["type"] = "missing_owner"
                 violations.append(violation)
 
+    #check if policy require to check too many down interfaces
+    if policy["max_down_interfaces"] is not None:
+        down_int = device.check_interfaces()
+        if down_int > policy["max_down_interfaces"]:
+            violation = {}
+            violation["device"] = device.id
+            violation["type"] = "too_many_down"
+            violation["down"] = down_int
+            violations.append(violation)
+
 
     
 
 audit["violations"] = violations
+
 
 
 
