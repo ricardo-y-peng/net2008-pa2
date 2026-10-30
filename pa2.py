@@ -12,6 +12,8 @@ class Device:
         self.owner = owner
         self.interfaces = interfaces
 
+    
+
 
 
 data_str = ""
@@ -42,11 +44,13 @@ try:
 except FileNotFoundError as e:
     print("file not found", e)
 
-#convert root into dict
+#convert root into a dict of Device class
 devices = []
+skipped_devices = 0
 for device in root:
     id = device.get("id")
     if id is None:
+        skipped_devices += 1
         continue
 
     os = device.get("os")
@@ -69,10 +73,49 @@ for device in root:
     a_device = Device(id, role, os, owner, interfaces)
     devices.append(a_device)
 
-print()
-print(len(devices))
-print(devices[0].id)
-print(devices[1].interfaces)
+total_devices = len(devices)
+
+#go for audit
+audit = {}
+
+site = root.get("site")
+audit["site"] = site
+audit["total_devices"] = total_devices
+audit["skipped_devices"] = skipped_devices
+
+roles = {}
+#go loop the list devices of class Device
+for device in devices:
+    role = device.role
+    if role in roles:
+        roles[role] += 1
+    else:
+        roles[role] = 1
+print("the roles: ", roles)
+audit["roles"] = roles
+
+
+#interfaces key in audit
+int_status = {"up":0, "down":0, "other": 0}
+for device in devices:
+   for interface in device.interfaces:
+       status = interface["status"]
+       if status == "up":
+           int_status["up"] += 1
+       elif status == "down":
+           int_status["down"] += 1
+       else:
+           int_status["other"] += 1
+           
+print("the interface status: ", int_status)
+audit["interfaces"] = int_status
+
+
+#violations key
+violations = []
+
+
+
     
     
 
