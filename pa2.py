@@ -4,8 +4,17 @@ import json
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
+#costum exception
+class BadInputFileError:
+    """a costum error type for bad input file"""
+    pass
+
+
 class Device:
+    """a class for storing the info of devices"""
+
     def __init__(self, id, role, os, owner, interfaces):
+        """to initiate a Device with its attribute"""
         self.id = id
         self.role = role
         self.os = os
@@ -13,10 +22,12 @@ class Device:
         self.interfaces = interfaces
 
     def check_owner(self):
+        """check if the Device has a owner, for the violation check"""
         if self.owner is None:
             return "missing_owner"
 
     def check_interfaces(self):
+        """check and return the number of down interfaces"""
         down_int = 0
         for interface in self.interfaces:
             if interface["status"] == "down":
@@ -24,6 +35,8 @@ class Device:
         return down_int
 
     def split_os(self):
+        """split the os string into multiple stirngs, and convert them to a list of int
+        for the violation os check"""
         os_splited = self.os.split(".")
         os_number = []
         for number in os_splited:
@@ -36,40 +49,42 @@ class Device:
 
 
 
-    
+if len(sys.argv) != 3:
+    print("usage: pa2.py DEVICES.xml POLICY.yaml")
+    sys.exit(2)
+
+xml_file = sys.argv[1]
+policy_file = sys.argv[2]
+
+data_str = ""
+try:
+    with open(xml_file, "r") as f:
+        data_str = f.read()
+
+    root = ET.fromstring(data_str)
+
+except FileNotFoundError as e:
+    print("error: ", e)
+    sys.exit(1)
+
+
+policy_str = ""
+try:
+    with open(policy_file, "r") as f:
+        policy_str = f.read()
+
+    policy = yaml.safe_load(policy_str)
+    if policy is None:
+        policy = {}
+
+except FileNotFoundError as e:
+    print("error: ", e)
+    sys.exit(1)
         
 
 
 
-data_str = ""
 
-#test if can read the str transfered from the file
-try:
-    #convert file into string data type
-    with open("PA2_sample1.xml", "r") as f:
-        data_str = f.read()
-
-    root = ET.fromstring(data_str)
-    print(root.tag)
-    print(root.attrib)
-
-except FileNotFoundError as e:
-    print("file not found", e)
-
-
-policy_str = ""
-#test if can open and transfer the policy file
-try:
-    with open("PA2_policy.yaml", "r") as f:
-        policy_str = f.read()
-
-    policy = yaml.safe_load(policy_str)
-    if policy == None:
-        policy = {}
-    
-
-except FileNotFoundError as e:
-    print("file not found", e)
 
 #convert root into a dict of Device class
 devices = []
@@ -93,8 +108,7 @@ for device in root:
         an_interface = {"name": name, "status": status}
         interfaces.append(an_interface)
 
-    #test the output, delete later
-    print(id, interfaces)
+   
         
 
     a_device = Device(id, role, os, owner, interfaces)
@@ -118,7 +132,7 @@ for device in devices:
         roles[role] += 1
     else:
         roles[role] = 1
-print("the roles: ", roles)
+
 audit["roles"] = roles
 
 
@@ -134,7 +148,7 @@ for device in devices:
        else:
            int_status["other"] += 1
            
-print("the interface status: ", int_status)
+
 audit["interfaces"] = int_status
 
 
