@@ -45,183 +45,185 @@ class Device:
         return os_number
     
 
-   
+
+
+def main():
+    """the main function"""
+
+    if len(sys.argv) != 3:
+        print("usage: pa2.py DEVICES.xml POLICY.yaml")
+        sys.exit(2)
+
+    xml_file = sys.argv[1]
+    policy_file = sys.argv[2]
+
+    data_str = ""
+    try:
+        with open(xml_file, "r") as f:
+            data_str = f.read()
+
+        root = ET.fromstring(data_str)
+
+    except FileNotFoundError as e:
+        print("error: ", e)
+        sys.exit(1)
+
+
+    policy_str = ""
+    try:
+        with open(policy_file, "r") as f:
+            policy_str = f.read()
+
+        policy = yaml.safe_load(policy_str)
+        if policy is None:
+            policy = {}
+
+    except FileNotFoundError as e:
+        print("error: ", e)
+        sys.exit(1)
+            
 
 
 
-if len(sys.argv) != 3:
-    print("usage: pa2.py DEVICES.xml POLICY.yaml")
-    sys.exit(2)
-
-xml_file = sys.argv[1]
-policy_file = sys.argv[2]
-
-data_str = ""
-try:
-    with open(xml_file, "r") as f:
-        data_str = f.read()
-
-    root = ET.fromstring(data_str)
-
-except FileNotFoundError as e:
-    print("error: ", e)
-    sys.exit(1)
 
 
-policy_str = ""
-try:
-    with open(policy_file, "r") as f:
-        policy_str = f.read()
+    #convert root into a dict of Device class
+    devices = []
+    skipped_devices = 0
+    for device in root:
+        id = device.get("id")
+        if id is None:
+            skipped_devices += 1
+            continue
 
-    policy = yaml.safe_load(policy_str)
-    if policy is None:
-        policy = {}
+        os = device.get("os")
+        role = device.get("role")
+        owner = device.findtext("owner")
 
-except FileNotFoundError as e:
-    print("error: ", e)
-    sys.exit(1)
-        
+        #make a list for interfaces, and append them into the list
+        interfaces = []
+        #make a dict for each interface
+        for interface in device.findall("interface"):
+            name = interface.get("name")
+            status = interface.get("status")
+            an_interface = {"name": name, "status": status}
+            interfaces.append(an_interface)
 
+    
+            
 
+        a_device = Device(id, role, os, owner, interfaces)
+        devices.append(a_device)
 
+    total_devices = len(devices)
 
+    #go for audit
+    audit = {}
 
-#convert root into a dict of Device class
-devices = []
-skipped_devices = 0
-for device in root:
-    id = device.get("id")
-    if id is None:
-        skipped_devices += 1
-        continue
+    site = root.get("site")
+    audit["site"] = site
+    audit["total_devices"] = total_devices
+    audit["skipped_devices"] = skipped_devices
 
-    os = device.get("os")
-    role = device.get("role")
-    owner = device.findtext("owner")
+    roles = {}
+    #go loop the list devices of class Device
+    for device in devices:
+        role = device.role
+        if role in roles:
+            roles[role] += 1
+        else:
+            roles[role] = 1
 
-    #make a list for interfaces, and append them into the list
-    interfaces = []
-    #make a dict for each interface
-    for interface in device.findall("interface"):
-        name = interface.get("name")
-        status = interface.get("status")
-        an_interface = {"name": name, "status": status}
-        interfaces.append(an_interface)
-
-   
-        
-
-    a_device = Device(id, role, os, owner, interfaces)
-    devices.append(a_device)
-
-total_devices = len(devices)
-
-#go for audit
-audit = {}
-
-site = root.get("site")
-audit["site"] = site
-audit["total_devices"] = total_devices
-audit["skipped_devices"] = skipped_devices
-
-roles = {}
-#go loop the list devices of class Device
-for device in devices:
-    role = device.role
-    if role in roles:
-        roles[role] += 1
-    else:
-        roles[role] = 1
-
-audit["roles"] = roles
+    audit["roles"] = roles
 
 
-#interfaces key in audit
-int_status = {"up":0, "down":0, "other": 0}
-for device in devices:
-   for interface in device.interfaces:
-       status = interface["status"]
-       if status == "up":
-           int_status["up"] += 1
-       elif status == "down":
-           int_status["down"] += 1
-       else:
-           int_status["other"] += 1
-           
+    #interfaces key in audit
+    int_status = {"up":0, "down":0, "other": 0}
+    for device in devices:
+        for interface in device.interfaces:
+            status = interface["status"]
+            if status == "up":
+                int_status["up"] += 1
+            elif status == "down":
+                int_status["down"] += 1
+            else:
+                int_status["other"] += 1
+            
 
-audit["interfaces"] = int_status
+    audit["interfaces"] = int_status
 
 
-#violations and compliant key
-#use .get() because policy[] may cause key error, but get() will not
-violations = []
-for device in devices:
+    #violations and compliant key
+    #use .get() because policy[] may cause key error, but get() will not
+    violations = []
+    for device in devices:
 
-    #check if policy require to check owner first
-    if policy.get("require_owner", False) == True:
-        #then check the owner
-        if device.check_owner() == "missing_owner":
+        #check if policy require to check owner first
+        if policy.get("require_owner", False) == True:
+            #then check the owner
+            if device.check_owner() == "missing_owner":
+                    violation = {}
+                    violation["device"] = device.id
+                    violation["type"] = "missing_owner"
+                    violations.append(violation)
+
+        #check if policy require to check too many down interfaces
+        if policy.get("max_down_interfaces") is not None:
+            down_int = device.check_interfaces()
+            if down_int > policy["max_down_interfaces"]:
                 violation = {}
                 violation["device"] = device.id
-                violation["type"] = "missing_owner"
+                violation["type"] = "too_many_down"
+                violation["down"] = down_int
                 violations.append(violation)
 
-    #check if policy require to check too many down interfaces
-    if policy.get("max_down_interfaces") is not None:
-        down_int = device.check_interfaces()
-        if down_int > policy["max_down_interfaces"]:
-            violation = {}
-            violation["device"] = device.id
-            violation["type"] = "too_many_down"
-            violation["down"] = down_int
-            violations.append(violation)
+        #check if policy require to check the unknown role
+        if policy.get("min_os") is not None:
+            #check if device.role in the keys of policy["min_os"]'s role to match
+            if device.role not in policy["min_os"]:
+                    violation = {}
+                    violation["device"] = device.id
+                    violation["type"] = "unknown_role"
+                    violation["role"] = device.role
+                    violations.append(violation)
 
-    #check if policy require to check the unknown role
-    if policy.get("min_os") is not None:
-        #check if device.role in the keys of policy["min_os"]'s role to match
-        if device.role not in policy["min_os"]:
-                violation = {}
-                violation["device"] = device.id
-                violation["type"] = "unknown_role"
-                violation["role"] = device.role
-                violations.append(violation)
+        #check if policy require to check the os version
+        if policy.get("min_os") is not None:
+            if device.role in policy["min_os"]:
+                required_os = policy["min_os"][device.role]
+                required_os_number = []
+                for number in required_os.split("."):
+                    number = int(number)
+                    required_os_number.append(number)
 
-    #check if policy require to check the os version
-    if policy.get("min_os") is not None:
-        if device.role in policy["min_os"]:
-            required_os = policy["min_os"][device.role]
-            required_os_number = []
-            for number in required_os.split("."):
-                number = int(number)
-                required_os_number.append(number)
-
-            if device.split_os() < required_os_number:
-                violation = {}
-                violation["device"] = device.id
-                violation["type"] = "os_outdated"
-                violation["found"] = device.os
-                violation["required"] = required_os
-                violations.append(violation)
+                if device.split_os() < required_os_number:
+                    violation = {}
+                    violation["device"] = device.id
+                    violation["type"] = "os_outdated"
+                    violation["found"] = device.os
+                    violation["required"] = required_os
+                    violations.append(violation)
 
 
 
-audit["violations"] = violations
-compliant = []
-violations_id = []
-for device in violations:
-    violations_id.append(device["device"])
+    audit["violations"] = violations
+    compliant = []
+    violations_id = []
+    for device in violations:
+        violations_id.append(device["device"])
 
-for device in devices:
-    if device.id not in violations_id:
-        compliant.append(device.id)
+    for device in devices:
+        if device.id not in violations_id:
+            compliant.append(device.id)
 
-audit["compliant"] = compliant
-with open("audit.json", "w") as f:
-    json.dump(audit, f, indent = 4)
+    audit["compliant"] = compliant
+    with open("audit.json", "w") as f:
+        json.dump(audit, f, indent = 4)
 
 
-   
-
+#nothing running at import except definitions and an if __name__ == "__main__"
+if __name__ == "__main__":
+    main()
 
 
 
