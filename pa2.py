@@ -64,7 +64,9 @@ try:
         policy_str = f.read()
 
     policy = yaml.safe_load(policy_str)
-    print(policy["min_os"]["switch"])
+    if policy == None:
+        policy = {}
+    
 
 except FileNotFoundError as e:
     print("file not found", e)
@@ -137,11 +139,12 @@ audit["interfaces"] = int_status
 
 
 #violations and compliant key
+#use .get() because policy[] may cause key error, but get() will not
 violations = []
 for device in devices:
 
     #check if policy require to check owner first
-    if policy["require_owner"] == True:
+    if policy.get("require_owner", False) == True:
         #then check the owner
         if device.check_owner() == "missing_owner":
                 violation = {}
@@ -150,7 +153,7 @@ for device in devices:
                 violations.append(violation)
 
     #check if policy require to check too many down interfaces
-    if policy["max_down_interfaces"] is not None:
+    if policy.get("max_down_interfaces") is not None:
         down_int = device.check_interfaces()
         if down_int > policy["max_down_interfaces"]:
             violation = {}
@@ -160,7 +163,7 @@ for device in devices:
             violations.append(violation)
 
     #check if policy require to check the unknown role
-    if policy["min_os"] is not None:
+    if policy.get("min_os") is not None:
         #check if device.role in the keys of policy["min_os"]'s role to match
         if device.role not in policy["min_os"]:
                 violation = {}
@@ -170,7 +173,7 @@ for device in devices:
                 violations.append(violation)
 
     #check if policy require to check the os version
-    if policy["min_os"] is not None:
+    if policy.get("min_os") is not None:
         if device.role in policy["min_os"]:
             required_os = policy["min_os"][device.role]
             required_os_number = []
@@ -199,7 +202,8 @@ for device in devices:
         compliant.append(device.id)
 
 audit["compliant"] = compliant
-print(audit)
+with open("audit.json", "w") as f:
+    json.dump(audit, f, indent = 4)
 
 
    
