@@ -23,6 +23,13 @@ class Device:
                 down_int += 1
         return down_int
 
+    def split_os(self):
+        os_splited = self.os.split(".")
+        os_number = []
+        for number in os_splited:
+            number = int(number)
+            os_number.append(number)
+        return os_number
     
 
    
@@ -162,11 +169,40 @@ for device in devices:
                 violation["role"] = device.role
                 violations.append(violation)
 
+    #check if policy require to check the os version
+    if policy["min_os"] is not None:
+        if device.role in policy["min_os"]:
+            required_os = policy["min_os"][device.role]
+            required_os_number = []
+            for number in required_os.split("."):
+                number = int(number)
+                required_os_number.append(number)
+
+            if device.split_os() < required_os_number:
+                violation = {}
+                violation["device"] = device.id
+                violation["type"] = "os_outdated"
+                violation["found"] = device.os
+                violation["required"] = required_os
+                violations.append(violation)
 
 
-    
 
 audit["violations"] = violations
+compliant = []
+violations_id = []
+for device in violations:
+    violations_id.append(device["device"])
+
+for device in devices:
+    if device.id not in violations_id:
+        compliant.append(device.id)
+
+audit["compliant"] = compliant
+print(audit)
+
+
+   
 
 
 
